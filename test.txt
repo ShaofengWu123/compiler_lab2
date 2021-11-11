@@ -1,0 +1,4 @@
+var i,a[10][20],j;
+begin
+i:=1;
+end.

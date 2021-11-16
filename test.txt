@@ -1,4 +1,12 @@
-var i,a[10][20],j;
+const m = 100;
+var i,a[10][10],j;
 begin
 i:=1;
+j:=23;
+print(i);
+print();
+print(m,j);
+print();
+print(i,j);
+print();
 end.

@@ -70,10 +70,10 @@ void getsym(void)
 		}
 		while (isalpha(ch) || isdigit(ch));
 		a[k] = 0;
-		strcpy(id, a);
+		strcpy(id, a);//strcpt(dest,src)
 		word[0] = id;
 		i = NRW;
-		while (strcmp(id, word[i--]));
+		while (strcmp(id, word[i--]));//serching in the reserved word array word[]
 		if (++i)
 			sym = wsym[i]; // symbol is a reserved word
 		else
@@ -85,7 +85,7 @@ void getsym(void)
 		sym = SYM_NUMBER;
 		do
 		{
-			num = num * 10 + ch - '0';
+			num = num * 10 + ch - '0';//set number's value
 			k++;
 			getch();
 		}
@@ -138,7 +138,7 @@ void getsym(void)
 		}
 	}
 	else
-	{ // other tokens
+	{ // other tokens, these tokens are specified in head file, token in csym and token name in ssym. New token should be added into csym and ssym.
 		i = NSYM;
 		csym[0] = ch;
 		while (csym[i--] != ch);
@@ -188,7 +188,7 @@ void test(symset s1, symset s2, int n)
 //////////////////////////////////////////////////////////////////////
 int dx;  // data allocation index
 
-// enter object(constant, variable or procedre) into table.
+// enter object(constant, variable or procedure) into table.
 void enter(int kind)
 {
 	mask* mk;
@@ -209,12 +209,14 @@ void enter(int kind)
 	case ID_VARIABLE:
 		mk = (mask*) &table[tx];
 		mk->level = level;
-		mk->address = dx++;
+		mk->address = dx++;//allocate store place for the variable 
 		break;
 	case ID_PROCEDURE:
 		mk = (mask*) &table[tx];
 		mk->level = level;
 		break;
+    case ID_ARRAY:
+        break;
 	} // switch
 } // enter
 
@@ -260,14 +262,18 @@ void constdeclaration()
 
 //////////////////////////////////////////////////////////////////////
 // dimdeclaration() added by Shaofeng Wu
-void dimdeclaration(void){
+void dimdeclaration(){
     if(sym == SYM_LSQUAREBRACKET){
         getsym();
-        if(sym == SYM_IDENTIFIER || sym == SYM_NUMBER){
+        if(sym == SYM_NUMBER){// number as dim size
+            /*temp->dim = temp->dim + 1; // TO BE DONE: the first dimension can be empty, but it can not now
+            temp->dim_size[temp->dim] = num;
+            temp->size = num*temp->size; */
             getsym();
             if(sym == SYM_RSQUAREBRACKET){getsym();dimdeclaration();}
             else{error(27);}//missing 
         }
+        else if(sym == SYM_IDENTIFIER){;}//to be done, use IDENTIFIER to represent dim size
         else{error(26);}//missing array size
     }
     else{;}
@@ -278,9 +284,14 @@ void vardeclaration(void)
 {
 	if (sym == SYM_IDENTIFIER)
 	{
-		enter(ID_VARIABLE);
-		getsym();
-		dimdeclaration();
+	    getsym();
+	    if(sym == SYM_LSQUAREBRACKET){
+	        enter(ID_ARRAY);//in enter(), array information space is allocated and members are initialized 
+	        //array_info * temp = (array_info *)malloc(sizeof(array_info));
+	        //temp -> dim = 0;temp->size = 0;
+	        dimdeclaration();
+	    }
+	    else {enter(ID_VARIABLE);}//enter uses the id for adding entry to the symbol table, id is not changed by getsym if sym is not a identifier
 	}
 	else
 	{
@@ -480,6 +491,8 @@ void statement(symset fsys)
 {
 	int i, cx1, cx2;
 	symset set1, set;
+	
+	int count = 0; //for print
 
 	if (sym == SYM_IDENTIFIER)
 	{ // variable assignment
@@ -488,26 +501,32 @@ void statement(symset fsys)
 		{
 			error(11); // Undeclared identifier.
 		}
-		else if (table[i].kind != ID_VARIABLE)
+		else if (table[i].kind != ID_VARIABLE && table[i].kind!= ID_ARRAY)
 		{
 			error(12); // Illegal assignment.
 			i = 0;
 		}
-		getsym();
-		if (sym == SYM_BECOMES)
+		if(table[i].kind == ID_VARIABLE)//variable assignment
 		{
-			getsym();
+		    getsym();
+		    if (sym == SYM_BECOMES)
+		    {
+			    getsym();
+		    }
+		    else
+		    {
+			    error(13); // ':=' expected.
+		    }
+		    expression(fsys);
+		    mk = (mask*) &table[i];
+		    if (i)
+		    {
+			    gen(STO, level - mk->level, mk->address);//change variable's number 
+		    }
 		}
-		else
-		{
-			error(13); // ':=' expected.
-		}
-		expression(fsys);
-		mk = (mask*) &table[i];
-		if (i)
-		{
-			gen(STO, level - mk->level, mk->address);
-		}
+		else{
+		    ;
+		}//array element assignment
 	}
 	else if (sym == SYM_CALL)
 	{ // procedure call
@@ -607,6 +626,44 @@ void statement(symset fsys)
 		statement(fsys);
 		gen(JMP, 0, cx1);
 		code[cx2].a = cx;
+	}
+	else if(sym == SYM_PRINT){
+	//print statement
+	    getsym();
+	    if(sym != SYM_LPAREN){error(28);}// wrong format for print
+	    while(1){
+	        getsym();
+	        if(sym == SYM_RPAREN){break;}
+	        else if(sym == SYM_IDENTIFIER){
+	            count++;
+	            if ((i = position(id)) == 0){error(11); }// Undeclared identifier.
+	            else if(table[i].kind != ID_VARIABLE && table[i].kind != ID_ARRAY && table[i].kind != ID_CONSTANT)
+	            {
+	                error(29);// wrong argument type for print
+	            }
+	            else{ 
+	                if(table[i].kind == ID_VARIABLE){//variable
+	                    mask * mk;
+	                    mk = (mask*) &table[i];
+					    gen(LOD, level - mk->level, mk->address);//load the variable's value onto stack
+	                }
+	                else if(table[i].kind == ID_CONSTANT){
+	                    gen(LIT,0,table[i].value);//load constant value onto stack
+	                }
+	                // array element to be added
+	                getsym();
+	                if(sym == SYM_COMMA){;}
+	                else if(sym == SYM_RPAREN){break;}
+	                else{error(28);}//wrong format
+	            }
+	        }
+	        else {
+	            if(sym == SYM_NUMBER){error(29);}// wrong argument type for print
+	            error(28);//wrong format 
+	        }    
+	    }
+	    gen(PRT,0,count); // generate code that print count positions in stack
+	    getsym();
 	}
 	test(fsys, phi, 19);
 } // statement
@@ -739,7 +796,9 @@ void block(symset fsys)
 	gen(INT, 0, block_dx);
 	set1 = createset(SYM_SEMICOLON, SYM_END, SYM_NULL);
 	set = uniteset(set1, fsys);
-	statement(set);
+
+	statement(set);// statement here
+	
 	destroyset(set1);
 	destroyset(set);
 	gen(OPR, 0, OPR_RET); // return
@@ -748,6 +807,7 @@ void block(symset fsys)
 } // block
 
 //////////////////////////////////////////////////////////////////////
+// this function goes to the base address of specific AR 
 int base(int stack[], int currentLevel, int levelDiff)
 {
 	int b = currentLevel;
@@ -762,7 +822,7 @@ int base(int stack[], int currentLevel, int levelDiff)
 void interpret()
 {
 	int pc;        // program counter
-	int stack[STACKSIZE];
+	int stack[STACKSIZE];//initialize a stack
 	int top;       // top of stack
 	int b;         // program, base, and top-stack register
 	instruction i; // instruction register
@@ -847,8 +907,8 @@ void interpret()
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
 			break;
 		case STO:
-			stack[base(stack, b, i.l) + i.a] = stack[top];
-			printf("%d\n", stack[top]);
+			stack[base(stack, b, i.l) + i.a] = stack[top];//store the number at top to specified address
+			//printf("%d\n", stack[top]);
 			top--;
 			break;
 		case CAL:
@@ -870,6 +930,15 @@ void interpret()
 				pc = i.a;
 			top--;
 			break;
+		case PRT:
+		    if(i.a==0){printf("\n");}
+		    else{
+		        for(int k=i.a-1;k>=0;k--){
+		            printf("%d ",stack[top-k]);//print argument's value one by one
+		        }
+		        top = top - i.a;//arguments are collected
+		    }
+		    break;
 		} // switch
 	}
 	while (pc);

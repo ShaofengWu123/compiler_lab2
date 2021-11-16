@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define NRW        11     // number of reserved words
+#define NRW        12     // number of reserved words, add print
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       12     // maximum number of symbols in array ssym and csym, add '[' and ']'
@@ -13,6 +13,8 @@
 #define MAXSYM     30     // maximum number of symbols  
 
 #define STACKSIZE  1000   // maximum storage
+
+#define MAX_DIM    100    // maximum dimensions an array can have 
 
 enum symtype
 {
@@ -47,17 +49,22 @@ enum symtype
 	SYM_VAR,
 	SYM_PROCEDURE,
 	SYM_LSQUAREBRACKET,
-	SYM_RSQUAREBRACKET
+	SYM_RSQUAREBRACKET,
+	SYM_PRINT
 };
 
 enum idtype
 {
-	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE
+	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE, ID_ARRAY
 };
 
+
+// added following opcode
+// PRT: print the stack top element
+//
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, PRT
 };
 
 enum oprcode
@@ -107,8 +114,8 @@ char* err_msg[] =
 /* 25 */    "The number is too great.",
 /* 26 */    "Must define the dimension size of an array.",
 /* 27 */    "Missing ']'.",
-/* 28 */    "",
-/* 29 */    "",
+/* 28 */    "Function print should be used in print(...) format.",
+/* 29 */    "Wrong argument type for print",
 /* 30 */    "",
 /* 31 */    "",
 /* 32 */    "There are too many levels."
@@ -125,24 +132,30 @@ int  kk;
 int  err;
 int  cx;         // index of current instruction to be generated.
 int  level = 0;
-int  tx = 0;
+int  tx = 0;     // current number of symbols in the symbol table
+int  arr_tx = 0; // current number of symbols in the array information table
 
 char line[80];
 
 instruction code[CXMAX];
 
+
+// Add following reserved word
+// print
+ 
 char* word[NRW + 1] =
 {
 	"", /* place holder */
 	"begin", "call", "const", "do", "end","if",
-	"odd", "procedure", "then", "var", "while"
+	"odd", "procedure", "then", "var", "while", "print"
 };
 
 int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CALL, SYM_CONST, SYM_DO, SYM_END,
-	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE
+	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE, SYM_PRINT
 };
+
 
 int ssym[NSYM + 1] =
 {
@@ -155,11 +168,22 @@ char csym[NSYM + 1] =
 	' ', '+', '-', '*', '/', '(', ')', '=', ',', '.', ';','[',']'
 };
 
-#define MAXINS   8
+#define MAXINS   9 //added PRT
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "PRT"
 };
+
+//define the structure that stores array information
+typedef struct
+{
+    int size;
+    int dim;//total dimension 
+    int dim_size[MAX_DIM];
+} array_info;
+
+//define array information table
+array_info * array_table[TXMAX];
 
 typedef struct
 {
@@ -168,7 +192,7 @@ typedef struct
 	int  value;
 } comtab;
 
-comtab table[TXMAX];
+comtab table[TXMAX];//symbol table
 
 typedef struct
 {

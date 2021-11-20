@@ -11,6 +11,9 @@
 #include "PL0.h"
 #include "set.c"
 
+
+void array_visit(short arr_index,int dim,symset fsys);
+
 //////////////////////////////////////////////////////////////////////
 // print error message.
 void error(int n)
@@ -209,6 +212,7 @@ void enter(int kind)
 	case ID_VARIABLE:
 		mk = (mask*) &table[tx];
 		mk->level = level;
+		printf("allocate for variable: %d\n",dx);
 		mk->address = dx++;//allocate store place for the variable 
 		break;
 	case ID_PROCEDURE:
@@ -216,6 +220,16 @@ void enter(int kind)
 		mk->level = level;
 		break;
     case ID_ARRAY:
+        mk = (mask*) &table[tx];
+		mk->level = level;
+		mk->address = arr_tx;//// add new entry in symble table and array table
+		pa = &(array_table[arr_tx]);
+		array_table[arr_tx].dim = 0; 
+		array_table[arr_tx].size = 1; 
+		//array_table[addr_tx].dim_size[0] = 1;
+		array_table[arr_tx].dim_size[1] = 0; // this place is set to zero in order to judge if first dimension is set by following analysis.
+		arr_tx++;
+		//dx has to wait until all dimensions analyzed
         break;
 	} // switch
 } // enter
@@ -262,21 +276,58 @@ void constdeclaration()
 
 //////////////////////////////////////////////////////////////////////
 // dimdeclaration() added by Shaofeng Wu
+// note: array declaration must have and can only have SYM_NUMBER,SYM_IDENTIFIER in each dimension
 void dimdeclaration(){
+    int i;
     if(sym == SYM_LSQUAREBRACKET){
         getsym();
-        if(sym == SYM_NUMBER){// number as dim size
-            /*temp->dim = temp->dim + 1; // TO BE DONE: the first dimension can be empty, but it can not now
-            temp->dim_size[temp->dim] = num;
-            temp->size = num*temp->size; */
+        switch(sym)
+        {
+
+        case SYM_NUMBER:// number as dim size
+            // store dimension size and increase dimension number
+            if(pa->dim==MAX_DIM){error(31);}//too many dimensions
+            if(num<=0){error(33);}//dimension size can not be negative or zero
+            pa->dim = pa->dim+1;
+            pa->dim_size[pa->dim] = num;
+            pa->size = pa->size * num;
             getsym();
             if(sym == SYM_RSQUAREBRACKET){getsym();dimdeclaration();}
             else{error(27);}//missing 
+            break;
+        case SYM_IDENTIFIER:
+            //it must be defined-const, variable is not allowed in declaration
+            if ((i = position(id)) == 0)
+			{
+				error(11); // Undeclared identifier.
+			}
+			if(table[i].kind != ID_CONSTANT){error(30);}
+			// store dimension size and increase dimension number
+			if(pa->dim==MAX_DIM){error(31);}//too many dimensions
+			if(table[i].value<=0){error(33);}//dimension size can not be negative or zero
+            pa->dim = pa->dim+1;
+            pa->dim_size[pa->dim] = table[i].value;
+            pa->size = pa->size * table[i].value;
+            getsym();
+            if(sym == SYM_RSQUAREBRACKET){getsym();dimdeclaration();}
+            else{error(27);}//missing 
+            break;
+            // TO BE DONE: the first dimension can be empty, but it can not now. And if the first dimension is empty, use initilization to fill in that dimension
+            default:
+            error(26);//missing array size, TO BE DONE: first dimension missing
+            break;
         }
-        else if(sym == SYM_IDENTIFIER){;}//to be done, use IDENTIFIER to represent dim size
-        else{error(26);}//missing array size
     }
-    else{;}
+    else{
+        //analyzed dimensions, allocate space if first dimension is clear 
+        if(pa->dim_size[1]){//first dimension clear, space can be allocated
+            //printf("allocate for array: %d\n",dx);
+            dx += pa->size;
+            pa->address = dx-1;
+            printf("allocate for array: %d\n",dx);
+        }  
+        else{;}//TO BE DONE
+    }
 }
 
 
@@ -316,7 +367,7 @@ void listcode(int from, int to)
 void factor(symset fsys)
 {
 	void expression(symset fsys);
-	int i;
+	int i;int arr_index;
 	symset set;
 	
 	test(facbegsys, fsys, 24); // The symbol can not be as the beginning of an expression.
@@ -336,17 +387,32 @@ void factor(symset fsys)
 					mask* mk;
 				case ID_CONSTANT:
 					gen(LIT, 0, table[i].value);
+					getsym();
 					break;
 				case ID_VARIABLE:
 					mk = (mask*) &table[i];
 					gen(LOD, level - mk->level, mk->address);
+					getsym();
 					break;
 				case ID_PROCEDURE:
 					error(21); // Procedure identifier can not be in an expression.
 					break;
+			    case ID_ARRAY: //add array element as factor
+                    mk = (mask*) &table[i];
+                    arr_index = mk->address;//index in array table
+	                mk = (mask*) &table[i];
+	                gen(LEA,level - mk->level,array_table[arr_index].address);//in the end, start address - offset
+	                gen(LIT,0,0);//add with 0 first 
+	                set = createset(SYM_RSQUAREBRACKET);
+	                array_visit(arr_index,0,set);
+	                //if(sym!= SYM_RPAREN){error(13);}
+	                //getsym(); array_visit already get next symbol
+	                gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
+	                gen(LDA, 0, 0);//use LDA to load array element to top 
+			        break;
 				} // switch
 			}
-			getsym();
+			//getsym();
 		}
 		else if (sym == SYM_NUMBER)
 		{
@@ -486,16 +552,37 @@ void condition(symset fsys)
 	} // else
 } // condition
 
+
+//array_visit
+void array_visit(short arr_index,int dim,symset fsys){//dim means number of dimensions that has been analyzed
+    getsym();
+    if(sym==SYM_LSQUAREBRACKET){
+        //check brackets
+        //if(sym!=SYM_LSQUAREBRACKET){error(35);}//missing '['
+        gen(LIT,0,array_table[arr_index].dim_size[dim+1]);
+        gen(OPR,0,OPR_MUL);//multiply top two
+        getsym();
+        expression(fsys);//if not an expression, error will be raised by expression(), ']' check is done in expression()
+        //getsym(); expression already get next symbol
+        // Note: offset overflow will check by runtime
+        gen(OPR, 0, OPR_ADD);//add calculated offset to multiplied number
+        array_visit(arr_index,dim+1,fsys);//visit next dimension 
+    }
+    else if(dim!=array_table[arr_index].dim){error(34);}//missing dimensions
+    //test
+} 
+
+
 //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int i, cx1, cx2;
+	int i, cx1, cx2;short arr_index;
 	symset set1, set;
 	
 	int count = 0; //for print
 
 	if (sym == SYM_IDENTIFIER)
-	{ // variable assignment
+	{ // variable assignment, added array element as left value
 		mask* mk;
 		if (! (i = position(id)))
 		{
@@ -517,6 +604,7 @@ void statement(symset fsys)
 		    {
 			    error(13); // ':=' expected.
 		    }
+		    
 		    expression(fsys);
 		    mk = (mask*) &table[i];
 		    if (i)
@@ -524,8 +612,23 @@ void statement(symset fsys)
 			    gen(STO, level - mk->level, mk->address);//change variable's number 
 		    }
 		}
-		else{
-		    ;
+		else if(table[i].kind == ID_ARRAY){
+		    //use a recursive function array_visit to read through brackets to calculate address. At the same time, generate neccessary code to calculate expressions between brackets.
+		    //always use the two value on stack top to calculate accumulated size and store next dimension value
+		    mk = (mask*) &table[i];
+		    arr_index = mk->address;//index in array table
+		    gen(LEA,level - mk->level,array_table[arr_index].address);//in the end, start address - offset
+		    gen(LIT,0,0);//add with 0 first 
+		    set1 = createset(SYM_RSQUAREBRACKET);
+		    array_visit(arr_index,0,set1);//for expression, it can only be followed by ] in this case
+		    //getsym(); array_visit already get next symbol
+		    if(sym!= SYM_BECOMES){error(13);}
+		    gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
+		    getsym();
+		    expression(fsys);//right value, move to top 
+		    if (i){//use STA instruction
+		        gen(STA, 0, 0);//calculated value on stack top, address should be calculated above
+		    }
 		}//array element assignment
 	}
 	else if (sym == SYM_CALL)
@@ -646,16 +749,34 @@ void statement(symset fsys)
 	                    mask * mk;
 	                    mk = (mask*) &table[i];
 					    gen(LOD, level - mk->level, mk->address);//load the variable's value onto stack
+					    getsym();
 	                }
 	                else if(table[i].kind == ID_CONSTANT){
 	                    gen(LIT,0,table[i].value);//load constant value onto stack
+	                    getsym();
 	                }
 	                // array element to be added
-	                getsym();
+	                else if(table[i].kind==ID_ARRAY){
+	                    int arr_index;
+	                    mask * mk;
+	                    mk = (mask*) &table[i];
+	                    arr_index = mk->address;//index in array table
+		                mk = (mask*) &table[i];
+		                gen(LEA,level - mk->level,array_table[arr_index].address);//in the end, start address - offset
+		                gen(LIT,0,0);//add with 0 first 
+		                set1 = createset(SYM_RSQUAREBRACKET);
+		                array_visit(arr_index,0,set1);
+		                //if(sym!= SYM_RPAREN){error(13);}
+		                //getsym(); array_visit already get next symbol
+		                gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
+		                gen(LDA, 0, 0);//use LDA to load array element to top 
+	                }
+	                //getsym();
 	                if(sym == SYM_COMMA){;}
 	                else if(sym == SYM_RPAREN){break;}
 	                else{error(28);}//wrong format
 	            }
+	            //destroyset(set1);
 	        }
 	        else {
 	            if(sym == SYM_NUMBER){error(29);}// wrong argument type for print
@@ -903,14 +1024,24 @@ void interpret()
 				break;
 			} // switch
 			break;
+	    case LEA:
+	        stack[++top] = base(stack, b, i.l) + i.a;
+	        break;
 		case LOD:
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
 			break;
+		case LDA:
+		    stack[top] = stack[b+stack[top]];
+		    break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];//store the number at top to specified address
 			//printf("%d\n", stack[top]);
 			top--;
 			break;
+	    case STA:
+	        stack[b+stack[top-1]] = stack[top];
+	        top = top -2;
+	        break;
 		case CAL:
 			stack[top + 1] = base(stack, b, i.l);
 			// generate new block mark

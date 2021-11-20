@@ -2,8 +2,9 @@
 USTC 2021 compiler lab2
 
 # To do list
-1. Array declaration: partly done, first dimension missing/symbol table entry format undone
-2. Array element used in expression: undone
-3. Array element assignment. (as left value): undone
-4. print function: partly done, array element as argument undone
-5. Array initilization(C style): undone
+1. Array declaration: partly done, symbol table entry format DONE ; first dimension missing UNDONE
+2. Array element used in expression: DONE
+3. Array element assignment. (as left value): DONE, note: dimension overflow UNDONE, should be done with runtime check, suggest adding a new instruction to check
+4. print function: DONE(array element, constant, variable as argument)
+5. Array initilization(C style): UNDONE
+

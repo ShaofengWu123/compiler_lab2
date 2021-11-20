@@ -64,7 +64,7 @@ enum idtype
 //
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, PRT
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, PRT,STA, LEA, LDA
 };
 
 enum oprcode
@@ -116,9 +116,12 @@ char* err_msg[] =
 /* 27 */    "Missing ']'.",
 /* 28 */    "Function print should be used in print(...) format.",
 /* 29 */    "Wrong argument type for print",
-/* 30 */    "",
-/* 31 */    "",
-/* 32 */    "There are too many levels."
+/* 30 */    "Only constant identifier is allowed for array declaration.",
+/* 31 */    "Too many dimensions for array declaration.",
+/* 32 */    "There are too many levels.",
+/* 33 */    "Array dimension can not be zero or negative.",
+/* 34 */    "Missing dimension(s) in array element assignment.",
+/* 35 */    "Missing '['."
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -126,6 +129,7 @@ char ch;         // last character read
 int  sym;        // last symbol read
 char id[MAXIDLEN + 1]; // last identifier read
 int  num;        // last number read
+struct _array_info * pa; //pointer to last array information read  
 int  cc;         // character count
 int  ll;         // line length
 int  kk;
@@ -168,22 +172,23 @@ char csym[NSYM + 1] =
 	' ', '+', '-', '*', '/', '(', ')', '=', ',', '.', ';','[',']'
 };
 
-#define MAXINS   9 //added PRT
+#define MAXINS   12 //added PRT,STA,LEA
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "PRT"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC", "PRT", "STA", "LEA", "LDA"
 };
 
 //define the structure that stores array information
-typedef struct
+typedef struct _array_info
 {
+    short address;
     int size;
     int dim;//total dimension 
-    int dim_size[MAX_DIM];
+    int dim_size[MAX_DIM+1];
 } array_info;
 
 //define array information table
-array_info * array_table[TXMAX];
+array_info array_table[TXMAX];
 
 typedef struct
 {
@@ -193,6 +198,8 @@ typedef struct
 } comtab;
 
 comtab table[TXMAX];//symbol table
+
+// if kind is array, then address stores the index of the array in another array table
 
 typedef struct
 {

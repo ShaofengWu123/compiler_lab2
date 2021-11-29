@@ -1031,7 +1031,7 @@ void interpret()
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
 			break;
 		case LDA:
-		    stack[top] = stack[b+stack[top]];
+		    stack[top] = stack[stack[top]];
 		    break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];//store the number at top to specified address
@@ -1039,7 +1039,7 @@ void interpret()
 			top--;
 			break;
 	    case STA:
-	        stack[b+stack[top-1]] = stack[top];
+	        stack[stack[top-1]] = stack[top];
 	        top = top -2;
 	        break;
 		case CAL:

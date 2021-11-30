@@ -275,6 +275,7 @@ void constdeclaration()
 
 //////////////////////////////////////////////////////////////////////
 // dimdeclaration() added by Shaofeng Wu
+// function empty first dimension added by Chen Wang
 // note: array declaration must have and can only have SYM_NUMBER,SYM_IDENTIFIER in each dimension
 void dimdeclaration() {
 	int i;
@@ -311,7 +312,19 @@ void dimdeclaration() {
 			if (sym == SYM_RSQUAREBRACKET) { getsym();dimdeclaration(); }
 			else { error(27); }//missing 
 			break;
-			// TO BE DONE: the first dimension can be empty, but it can not now. And if the first dimension is empty, use initilization to fill in that dimension
+            case SYM_RSQUAREBRACKET:
+                //a[][5]={1,2,3}
+                //first dimension is empty, added by Chen Wang,30/11/2021
+                //And if the first dimension is empty, use initilization to fill in that dimension
+                if(pa->dim!=0){
+                    error(39);
+                }//the empty dimension must be the first one
+                pa->dim = pa->dim + 1;
+                pa->dim_size[pa->dim] = 0;
+                pa->size = pa->size * 1;
+                getsym();
+                dimdeclaration();
+                break;
 		default:
 			error(26);//missing array size, TO BE DONE: first dimension missing
 			break;
@@ -325,7 +338,33 @@ void dimdeclaration() {
 			pa->address = dx - 1;
 			printf("allocate for array: %d\n", dx - 1);
 		}
-		else { ; }//TO BE DONE
+		else {
+            //first dim empty,look forward to fill the first dim
+            int savecc=cc;
+            char savech=ch;
+            int savesym=sym;
+            int cntnumber=0;
+            int cntdimsize=0;
+            //read until id or  ";"
+            getsym();
+            while(sym!=SYM_SEMICOLON && sym!=SYM_IDENTIFIER ){
+                if(sym==SYM_NUMBER)
+                    cntnumber++;
+                getsym();
+            }
+            pa->size = cntnumber;
+            for(int i=1;i<=pa->dim;i++){
+                cntdimsize+=pa->dim_size[i];
+            }
+            pa->dim_size[1] = pa->size/cntdimsize;
+            dx += pa->size;
+            pa->address = dx - 1;
+            printf("allocate for array: %d\n", dx - 1);
+            printf("total dim %d,first dim size %d\n", pa->dim,pa->dim_size[1]);
+            cc = savecc;
+            ch = savech;
+            sym = savesym;
+		}
 	}
 }
 
@@ -435,7 +474,7 @@ void vardeclaration(void)
 			//array_info * temp = (array_info *)malloc(sizeof(array_info));
 			//temp -> dim = 0;temp->size = 0;
 			dimdeclaration();
-			if (sym == SYM_BECOMES) {
+			if (sym == SYM_BECOMES || sym == SYM_EQU) {
 				getsym();
 				if (sym == SYM_LBRACKET) {
 					current_level = -1;
@@ -1259,7 +1298,7 @@ void main()
 		interpret();
 	else
 		printf("There are %d error(s) in PL/0 program.\n", err);
-	listcode(0, cx);
+	//listcode(0, cx);
 
 
 

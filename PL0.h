@@ -126,7 +126,8 @@ char* err_msg[] =
 	/* 35 */    "Missing '['.",
 	/* 36 */    "Missing '{'.",
 	/* 37 */    "Illegal initialization'.",
-	/* 38 */    "Missing '}'."
+	/* 38 */    "Missing '}'.",
+	/* 39 */    "The empty dimension must be the first one."
 };
 
 //////////////////////////////////////////////////////////////////////

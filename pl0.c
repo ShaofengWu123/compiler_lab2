@@ -369,6 +369,7 @@ void dimdeclaration() {
             int cntdimsize=0;
             //read until id or  ";"
             getsym();
+            //count numbers
             while(sym!=SYM_SEMICOLON && sym!=SYM_IDENTIFIER ){
                 if(sym==SYM_NUMBER)
                     cntnumber++;
@@ -380,6 +381,7 @@ void dimdeclaration() {
             }
             if(cntdimsize==0)
                 cntdimsize=1;
+            //calculate first dim
             pa->dim_size[1] = pa->size/cntdimsize;
             dx += pa->size;
             pa->address = dx - 1;

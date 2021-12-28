@@ -6,7 +6,7 @@
 - 王晨 PE20060014
 - 伍少枫 PE20110007
 
-完成日期：2021年11月30日
+完成日期：2021年12月28日
 
 ## 1.实验要求
 
@@ -481,8 +481,53 @@ while(1){
 
 ​	综上，`print`被作为保留关键字加入PL/0语言，其为`statement`的一种情况。通过递归下降分析其括号内参数，将合法参数的值依次加载到栈顶，最后通过`PRT`指令将这些值逆序打印并统一出栈。
 
+### 3.6.数组初始化
 
+#### 3.6.1.功能
+    数组初始化时，根据数组中的值分配内存，包括缺失时补零。
 
+#### 3.6.2.实现
+
+##### 3.6.2.1.文法
+    根据c语言规范得到如下文法：
+        initializer:
+	            num
+                { initializer-list }
+                { initializer-list , }
+        initializer-list:
+                initializer  initializer-list1
+                ε
+        initializer-list1:
+                , initializer  initializer-list1
+##### 3.6.2.2.翻译
+    根据需要保留如下变量：
+    ```c
+        int current_level, max_level, array_index, array_dim;//level，最大level，数组相对偏移，数组维数
+        int current_array[MAX_DIM + 1], max_array[MAX_DIM + 1];//每维当前数组下标，每维最大数组下标
+        int array_full, before_Lbracket;//用于判断数组是否满，判断是否是{}的情况
+        int judge_level[MAX_DIM + 1];//该维允许最大长度
+        int bracketlevel[MAX_DIM + 1];//保存左括号的level
+        int bl_index;//未匹配左括号数
+    ```
+###### 3.6.2.2.1.左括号
+    对level做出判断，并保存该左括号的level，并将before_Lbracket置为1。
+    ```c
+        current_level = max(current_level + 1, levelbyindex());
+        before_Lbracket = 1;
+        bracketlevel[++bl_index] = current_level;
+    ```
+###### 3.6.2.2.2.NUM
+    将NUM入栈保存，将before_Lbracket置为1，并将array_index++。
+    ```c
+        gen(LIT, 0, array_index++);
+		gen(LIT, 0, num);
+		gen(STI, 0, 0);
+    ```
+###### 3.6.2.2.3.右括号
+    根据当前位置进行补零，并更新array_index++。
+    这段代码太繁琐不直观，就不放代码了。
+
+由此可以实现初始化时的翻译。
 ## 4.实验结果演示
 
 ### 4.1.代码编译方法
@@ -511,6 +556,9 @@ gcc -o plcc pl0.c
 #### 4.2.2 测试用例2的运行结果（../test2.txt）
 ![img_1.png](img_1.png)
 
+#### 4.2.3 测试用例2的运行结果（../test2.txt）
+![img_2.png](img_2.png)
+
 ## 5.实验总结
 
 ​	通过本次实验，我们从词法、文法、代码生成、代码运行等多个方面对PL/0编程语言有了了解，理解了PL/0语言文法设计、活动记录安排、嵌套结构实现、过程调用、符号表实现等多各方面的设计理念与技巧，并合作为PL/0语言添加了数组功能，具体而言包括：
@@ -534,12 +582,15 @@ gcc -o plcc pl0.c
 
 王晨：
 
-1.添加数组声明初始化时第一维为空的功能。  
-2.对代码添加了大量注释，对PL/0指令集添加了指令说明的注释。  
-3.针对测试用例检查、修改代码。  
-4.编写实验报告及ppt。  
+1. 添加数组声明初始化时第一维为空的功能。  
+2. 对代码添加了大量注释，对PL/0指令集添加了指令说明的注释。  
+3. 针对测试用例检查、修改代码。  
+4. 编写实验报告及ppt。  
 
 徐姝玮：
+
+1. 完成数组初始化以及相关能用到的部分。
+2. 完成实验报告中包含以上内容的部分。
 
 ## 7.参考
 

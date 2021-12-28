@@ -125,9 +125,9 @@ char* err_msg[] =
 	/* 34 */    "Missing dimension(s) in array element assignment.",
 	/* 35 */    "Missing '['.",
 	/* 36 */    "Missing '{'.",
-	/* 37 */    "Illegal initialization'.",
-	/* 38 */    "Missing '}'.",
-	/* 39 */    "The empty dimension must be the first one."
+	/* 37 */    "Illegal initialization.",
+	/* 38 */    "Missing '}'."
+	/* 39 */	"The empty dimension must be the first one."
 };
 
 //////////////////////////////////////////////////////////////////////

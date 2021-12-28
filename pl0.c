@@ -11,6 +11,7 @@
 #include "PL0.h"
 #include "set.c"
 
+
 void array_visit(short arr_index, int dim, symset fsys);
 
 //////////////////////////////////////////////////////////////////////
@@ -156,30 +157,7 @@ void getsym(void)
 } // getsym
 
 //////////////////////////////////////////////////////////////////////
-//
-//			f			l			a
-//			INT			--			numerical constant			// allocate storage in stack
-//			LIT			--			numerical constant			// set a constant on top of the stack
-//			LOD			levelDiff	data address
-//			LODI		levelDiff	--(addr at top of the stack)
-//			LODS		--			--(absolute addr at top of the stack)
-//			LEA			levelDiff	data address				// put the address of an var on stack top
-//			STO			levelDiff	target address
-//			STOI		levelDiff	--(addr at top - 1 of the stack, data at top)
-//			STOS		--			--(absolute addr at top - 1 of the stack, data at top)
-//			CAL			levelDiff	procedure address
-//			CALS		levelDiff	address of cx of the procedure stored in stack
-//			JMP			--			procedure address
-//			JPC			--			procedure address			// if stack[top]==0, jump to an address
-//			JND			--			procedure address			// if stack[top]==0, jump without top--
-//			JNDN		--			procedure address			// if stack[top]!=0, jump without top--
-//			RET			--			total words that the pointer top need to move down
-//			OPR			--			type of algebraic/logical instructions
-//			PRNT		--			total words at stack top to be printed(if 0, print('\n'))
-//
-
-// generates (assembles) an instruction.// generates (assembles) an instruction.
-//每次调用生成一条汇编代码, 存放在全局数组 code[] 中
+// generates (assembles) an instruction.
 void gen(int x, int y, int z)
 {
 	if (cx > CXMAX)
@@ -233,7 +211,7 @@ void enter(int kind)
 		mk = (mask*)&table[tx];
 		mk->level = level;
 		printf("allocate for variable: %d\n", dx);
-		mk->address = dx++;//allocate store place for the variable
+		mk->address = dx++;//allocate store place for the variable 
 		break;
 	case ID_PROCEDURE:
 		mk = (mask*)&table[tx];
@@ -295,9 +273,19 @@ void constdeclaration()
 	// There must be an identifier to follow 'const', 'var', or 'procedure'.
 } // constdeclaration
 
+void countsize(void);
+int current_level, max_level, array_index, array_dim;
+int current_array[MAX_DIM + 1], max_array[MAX_DIM + 1];
+int array_full, before_Lbracket;
+int judge_level[MAX_DIM + 1];
+int bracketlevel[MAX_DIM + 1];
+int bl_index;
+void initializer(void);
+
 //////////////////////////////////////////////////////////////////////
 // dimdeclaration() added by Shaofeng Wu
 // function empty first dimension added by Chen Wang
+// array initialization added by Camb Xu
 // note: array declaration must have and can only have SYM_NUMBER,SYM_IDENTIFIER in each dimension
 void dimdeclaration() {
 	int i;
@@ -315,7 +303,7 @@ void dimdeclaration() {
 			pa->size = pa->size * num;
 			getsym();
 			if (sym == SYM_RSQUAREBRACKET) { getsym();dimdeclaration(); }
-			else { error(27); }//missing
+			else { error(27); }//missing 
 			break;
 		case SYM_IDENTIFIER:
 			//it must be defined-const, variable is not allowed in declaration
@@ -332,28 +320,28 @@ void dimdeclaration() {
 			pa->size = pa->size * table[i].value;
 			getsym();
 			if (sym == SYM_RSQUAREBRACKET) { getsym();dimdeclaration(); }
-			else { error(27); }//missing
+			else { error(27); }//missing 
 			break;
-            case SYM_RSQUAREBRACKET:
-                //a[][2]={1,2,3,4}
-                //first dimension is empty, added by Chen Wang,30/11/2021
-                //And if the first dimension is empty, use initilization to fill in that dimension
-                if(pa->dim!=0){
-                    error(39);
-                }//the empty dimension must be the first one
-                pa->dim = pa->dim + 1;
-                pa->dim_size[pa->dim] = 0;
-                pa->size = pa->size * 1;
-                getsym();
-                dimdeclaration();
-                break;
+		case SYM_RSQUAREBRACKET:
+			//a[][5]={1,2,3}
+			//first dimension is empty, added by Chen Wang,30/11/2021
+			//And if the first dimension is empty, use initilization to fill in that dimension
+			if (pa->dim != 0) {
+				error(39);
+			}//the empty dimension must be the first one
+			pa->dim = pa->dim + 1;
+			pa->dim_size[pa->dim] = 0;
+			pa->size = pa->size * 1;
+			getsym();
+			dimdeclaration();
+			break;
 		default:
 			error(26);//missing array size, TO BE DONE: first dimension missing
 			break;
 		}
 	}
 	else {
-		//analyzed dimensions, allocate space if first dimension is clear
+		//analyzed dimensions, allocate space if first dimension is clear 
 		if (pa->dim_size[1]) {//first dimension clear, space can be allocated
 			//printf("allocate for array: %d\n",dx);
 			dx += pa->size;
@@ -361,43 +349,74 @@ void dimdeclaration() {
 			printf("allocate for array: %d\n", dx - 1);
 		}
 		else {
-            //first dim empty,look forward to fill the first dim
-            int savecc=cc;
-            char savech=ch;
-            int savesym=sym;
-            int cntnumber=0;
-            int cntdimsize=0;
-            //read until id or  ";"
-            getsym();
-            //count numbers
-            while(sym!=SYM_SEMICOLON && sym!=SYM_IDENTIFIER ){
-                if(sym==SYM_NUMBER)
-                    cntnumber++;
-                getsym();
-            }
-            pa->size = cntnumber;
-            for(int i=1;i<=pa->dim;i++){
-                cntdimsize+=pa->dim_size[i];
-            }
-            if(cntdimsize==0)
-                cntdimsize=1;
-            //calculate first dim
-            pa->dim_size[1] = pa->size/cntdimsize;
-            dx += pa->size;
-            pa->address = dx - 1;
-            printf("allocate for array: %d\n", dx - 1);
-            printf("total dim %d,first dim size %d\n", pa->dim,pa->dim_size[1]);
-            cc = savecc;
-            ch = savech;
-            sym = savesym;
+			//first dim empty,look forward to fill the first dim
+			int savecc = cc;
+			char savech = ch;
+			int savesym = sym;
+			int cntnumber = 0;
+			int cntdimsize = 0;
+			//read until id or  ";"
+			getsym();
+			/*while (sym != SYM_SEMICOLON && sym != SYM_IDENTIFIER) {
+				if (sym == SYM_NUMBER)
+					cntnumber++;
+				getsym();
+			}*/
+			//pa->size = cntnumber;
+			for (int i = 1;i <= pa->dim;i++) {
+				cntdimsize += pa->dim_size[i];
+			}
+			pa->size = cntdimsize;
+			//pa->dim_size[1] = pa->size / cntdimsize;
+			pa->dim_size[1] = -1;
+			//dx += pa->size;
+			//pa->address = dx - 1;
+			//printf("allocate for array: %d\n", dx - 1);
+			//printf("total dim %d,first dim size %d\n", pa->dim, pa->dim_size[1]);
+
+			current_level = -1;
+			array_index = 0;
+			array_dim = pa->dim;
+			max_level = pa->dim;
+			array_full = 0;
+			before_Lbracket = 0;
+			bl_index = 0;
+			for (int k = 1;k < array_dim + 1;k++) {
+				current_array[k] = 0;
+				max_array[k] = pa->dim_size[k] - 1;
+				bracketlevel[k] = 0;
+			}
+			if (pa->dim_size[1] == -1) {
+				max_array[1] = 5;
+			}
+			int temp = 1;
+			for (int k = array_dim;k > 0;k--) {
+				judge_level[k] = temp;
+				temp = temp * pa->dim_size[k];
+			}
+			current_array[array_dim] = -1;
+			mask* mk;
+			mk = (mask*)&table[tx];
+			countsize();
+
+			cc = savecc;
+			ch = savech;
+			sym = savesym;
 		}
 	}
 }
 
-int current_level, max_level, array_index, array_dim;
-int current_array[MAX_DIM + 1], max_array[MAX_DIM + 1];
-int array_full,before_Lbracket;
-void initializer(void);
+
+
+
+
+int levelbyindex(void) {
+	for (int k = 1;k <= array_dim;k++) {
+		if ((array_index % judge_level[k]) == 0) {
+			return k;
+		}
+	}
+}
 
 void initializer_list1(void)
 {
@@ -441,10 +460,17 @@ void initializer(void)
 		gen(LIT, 0, array_index++);
 		gen(LIT, 0, num);
 		gen(STI, 0, 0);
+
 	}
 	else if (sym == SYM_LBRACKET) {
-		current_level++;
-		before_Lbracket = 1;
+		if (current_level == -1) {
+			current_level = 0;
+		}
+		else {
+			current_level = max(current_level + 1, levelbyindex());
+			before_Lbracket = 1;
+			bracketlevel[++bl_index] = current_level;
+		}
 		if (current_level > max_level) {
 			error(37);
 			return;
@@ -461,7 +487,41 @@ void initializer(void)
 					gen(LIT, 0, 0);
 					gen(STI, 0, 0);
 				}
-				current_level--;
+				before_Lbracket = 0;
+				current_level = bracketlevel[--bl_index];
+			}
+			else if (current_level == 0&& pa->dim_size[1] == -1) {
+				int k, offset_count, array_index_after = 0;
+				if (array_index == 0) {
+					offset_count = judge_level[1];
+					for (int offset = 0;offset < offset_count;offset++) {
+						gen(LIT, 0, array_index + offset);
+						gen(LIT, 0, 0);
+						gen(STI, 0, 0);
+					}
+				}
+				else {
+					//current_array[1] = (array_index - 1) / judge_level[1];
+					for (k = 2;k < array_dim + 1;k++) {
+						current_array[k] = max_array[k];
+					}
+					for (int m = 1;m < array_dim + 1;m++) {
+						array_index_after = array_index_after * (max_array[m] + 1) + current_array[m];
+					}
+					array_index_after++;
+					offset_count = array_index_after - array_index;
+					for (int offset = 0;offset < offset_count;offset++) {
+						gen(LIT, 0, array_index + offset);
+						gen(LIT, 0, 0);
+						gen(STI, 0, 0);
+					}
+					array_index = array_index_after;
+					pa->dim_size[1] = array_index / judge_level[1];
+					pa->size = array_index;
+					dx += pa->size;
+					pa->address = dx - 1;
+					printf("allocate for array: %d\n", dx-1);
+				}
 			}
 			else {
 				int k, offset_count, array_index_after = 0;
@@ -478,8 +538,123 @@ void initializer(void)
 					gen(LIT, 0, 0);
 					gen(STI, 0, 0);
 				}
+				before_Lbracket = 0;
 				array_index = array_index_after;
-				current_level--;
+				current_level = bracketlevel[--bl_index];
+			}
+			return;
+		}
+		else
+			error(38);
+	}
+	else
+		error(36);
+}
+
+void countsize_list1(void)
+{
+	if (sym == SYM_COMMA) {
+		getsym();
+		countsize();
+		getsym();
+		countsize_list1();
+	}
+}
+
+void countsize_list(void)
+{
+	if (sym == SYM_NUMBER || sym == SYM_LBRACKET) {
+		countsize();
+		getsym();
+		countsize_list1();
+	}
+}
+
+void countsize(void)
+{
+	if (sym == SYM_NUMBER) {
+		int k;
+		before_Lbracket = 0;
+		for (k = array_dim;k > 0;k--) {
+			if (current_array[k] < max_array[k]) {
+				current_array[k]++;
+				break;
+			}
+			if (current_array[k] == max_array[k]) {
+				current_array[k] = 0;
+			}
+		}
+		array_index++;
+		/*if (k == 0) {
+			error(37);
+			return;
+		}*/
+	}
+	else if (sym == SYM_LBRACKET) {
+		if (current_level == -1) {
+			current_level = 0;
+		}
+		else {
+			current_level = max(current_level + 1, levelbyindex());
+			before_Lbracket = 1;
+			bracketlevel[++bl_index] = current_level;
+		}
+		/*if (current_level > max_level) {
+			error(37);
+			return;
+		}*/
+		getsym();
+		countsize_list();
+		if (sym == SYM_COMMA) {
+			getsym();
+		}
+		if (sym == SYM_RBRACKET) {
+			if (current_level == max_level) {
+				if (before_Lbracket) {
+					array_index++;
+				}
+				before_Lbracket = 0;
+				current_level = bracketlevel[--bl_index];
+			}
+			else if (current_level == 0 && pa->dim_size[1] == -1) {
+				int k, offset_count, array_index_after = 0;
+				if (array_index == 0) {
+					offset_count = judge_level[1];
+				}
+				else {
+					//current_array[1] = (array_index - 1) / judge_level[1];
+					for (k = 2;k < array_dim + 1;k++) {
+						current_array[k] = max_array[k];
+					}
+					for (int m = 1;m < array_dim + 1;m++) {
+						array_index_after = array_index_after * (max_array[m] + 1) + current_array[m];
+					}
+					array_index_after++;
+					offset_count = array_index_after - array_index;
+					for (int offset = 0;offset < offset_count;offset++) {
+						array_index + offset;
+					}
+					array_index = array_index_after;
+					pa->dim_size[1] = array_index / judge_level[1];
+					pa->size = array_index;
+					dx += pa->size;
+					pa->address = dx - 1;
+					printf("allocate for array: %d\n", dx - 1);
+				}
+			}
+			else {
+				int k, offset_count, array_index_after = 0;
+				for (k = array_dim;k > current_level;k--) {
+					current_array[k] = max_array[k];
+				}
+				for (int m = 1;m < array_dim + 1;m++) {
+					array_index_after = array_index_after * (max_array[m] + 1) + current_array[m];
+				}
+				array_index_after++;
+				offset_count = array_index_after - array_index;
+				before_Lbracket = 0;
+				array_index = array_index_after;
+				current_level = bracketlevel[--bl_index];
 			}
 			return;
 		}
@@ -496,11 +671,11 @@ void vardeclaration(void)
 	{
 		getsym();
 		if (sym == SYM_LSQUAREBRACKET) {
-			enter(ID_ARRAY);//in enter(), array information space is allocated and members are initialized
+			enter(ID_ARRAY);//in enter(), array information space is allocated and members are initialized 
 			//array_info * temp = (array_info *)malloc(sizeof(array_info));
 			//temp -> dim = 0;temp->size = 0;
 			dimdeclaration();
-			if (sym == SYM_BECOMES || sym == SYM_EQU) {
+			if (sym == SYM_EQU) {
 				getsym();
 				if (sym == SYM_LBRACKET) {
 					current_level = -1;
@@ -508,9 +683,20 @@ void vardeclaration(void)
 					array_dim = pa->dim;
 					max_level = pa->dim;
 					array_full = 0;
+					before_Lbracket = 0;
+					bl_index = 0;
 					for (int k = 1;k < array_dim + 1;k++) {
 						current_array[k] = 0;
 						max_array[k] = pa->dim_size[k] - 1;
+						bracketlevel[k] = 0;
+					}
+					if (pa->dim_size[1] == -1) {
+						max_array[1] = 5;
+					}
+					int temp = 1;
+					for (int k = array_dim;k > 0;k--) {
+						judge_level[k] = temp;
+						temp = temp * pa->dim_size[k];
 					}
 					current_array[array_dim] = -1;
 					mask* mk;
@@ -585,13 +771,13 @@ void factor(symset fsys)
 					arr_index = mk->address;//index in array table
 					mk = (mask*)&table[i];
 					gen(LEA, level - mk->level, array_table[arr_index].address);//in the end, start address - offset
-					gen(LIT, 0, 0);//add with 0 first
+					gen(LIT, 0, 0);//add with 0 first 
 					set = createset(SYM_RSQUAREBRACKET);
 					array_visit(arr_index, 0, set);
 					//if(sym!= SYM_RPAREN){error(13);}
 					//getsym(); array_visit already get next symbol
 					gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
-					gen(LDA, 0, 0);//use LDA to load array element to top
+					gen(LDA, 0, 0);//use LDA to load array element to top 
 					break;
 				} // switch
 			}
@@ -749,7 +935,7 @@ void array_visit(short arr_index, int dim, symset fsys) {//dim means number of d
 		//getsym(); expression already get next symbol
 		// Note: offset overflow will check by runtime
 		gen(OPR, 0, OPR_ADD);//add calculated offset to multiplied number
-		array_visit(arr_index, dim + 1, fsys);//visit next dimension
+		array_visit(arr_index, dim + 1, fsys);//visit next dimension 
 	}
 	else if (dim != array_table[arr_index].dim) { error(34); }//missing dimensions
 	//test
@@ -792,7 +978,7 @@ void statement(symset fsys)
 			mk = (mask*)&table[i];
 			if (i)
 			{
-				gen(STO, level - mk->level, mk->address);//change variable's number
+				gen(STO, level - mk->level, mk->address);//change variable's number 
 			}
 		}
 		else if (table[i].kind == ID_ARRAY) {
@@ -801,14 +987,14 @@ void statement(symset fsys)
 			mk = (mask*)&table[i];
 			arr_index = mk->address;//index in array table
 			gen(LEA, level - mk->level, array_table[arr_index].address);//in the end, start address - offset
-			gen(LIT, 0, 0);//add with 0 first
+			gen(LIT, 0, 0);//add with 0 first 
 			set1 = createset(SYM_RSQUAREBRACKET);
 			array_visit(arr_index, 0, set1);//for expression, it can only be followed by ] in this case
 			//getsym(); array_visit already get next symbol
 			if (sym != SYM_BECOMES) { error(13); }
 			gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
 			getsym();
-			expression(fsys);//right value, move to top
+			expression(fsys);//right value, move to top 
 			if (i) {//use STA instruction
 				gen(STA, 0, 0);//calculated value on stack top, address should be calculated above
 			}
@@ -835,7 +1021,7 @@ void statement(symset fsys)
 			}
 			else
 			{
-				error(15); // A constant or variable can not be called.
+				error(15); // A constant or variable can not be called. 
 			}
 			getsym();
 		}
@@ -946,13 +1132,13 @@ void statement(symset fsys)
 						arr_index = mk->address;//index in array table
 						mk = (mask*)&table[i];
 						gen(LEA, level - mk->level, array_table[arr_index].address);//in the end, start address - offset
-						gen(LIT, 0, 0);//add with 0 first
+						gen(LIT, 0, 0);//add with 0 first 
 						set1 = createset(SYM_RSQUAREBRACKET);
 						array_visit(arr_index, 0, set1);
 						//if(sym!= SYM_RPAREN){error(13);}
 						//getsym(); array_visit already get next symbol
 						gen(OPR, 0, OPR_MIN);//top-1 - top -> top-1
-						gen(LDA, 0, 0);//use LDA to load array element to top
+						gen(LDA, 0, 0);//use LDA to load array element to top 
 					}
 					//getsym();
 					if (sym == SYM_COMMA) { ; }
@@ -963,7 +1149,7 @@ void statement(symset fsys)
 			}
 			else {
 				if (sym == SYM_NUMBER) { error(29); }// wrong argument type for print
-				error(28);//wrong format
+				error(28);//wrong format 
 			}
 		}
 		gen(PRT, 0, count); // generate code that print count positions in stack
@@ -1243,7 +1429,7 @@ void interpret()
 			top = STACKSIZE - 10;
 			break;
 		case RET:
-			top = stack[top-1];
+			top = stack[top - 1];
 			break;
 		case JMP:
 			pc = i.a;
